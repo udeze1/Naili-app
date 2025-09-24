@@ -1,43 +1,51 @@
 import React from 'react';
-import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { View, Text, Pressable, StyleSheet, FlatList } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { HomeTabStackParamList } from './tabs/HomeTabStack'; // Adjust path as needed
-import { useUser } from '../context/UserContext'; // Make sure this path is correct
+import { HomeTabStackParamList } from './tabs/HomeTabStack';
+import { Ionicons } from '@expo/vector-icons'; // Tick icon
 
 type NavigationProp = NativeStackNavigationProp<HomeTabStackParamList, 'RestaurantScreen'>;
 
+const restaurantData = [
+  { id: '1', name: 'Noni Foods', screen: 'NoniFoodsScreen', status: 'Delivering now' },
+];
+
 const RestaurantScreen = () => {
   const navigation = useNavigation<NavigationProp>();
-  const { address } = useUser();
+
+  const renderCard = ({ item }: { item: typeof restaurantData[0] }) => (
+    <Pressable
+      style={styles.card}
+      onPress={() => navigation.navigate('NoniFoodsScreen')}
+    >
+      <Text style={styles.vendorName}>{item.name}</Text>
+      <Text style={styles.vendorStatus}>{item.status}</Text>
+    </Pressable>
+  );
 
   return (
     <View style={styles.container}>
-      {/* Top Navigation Bar */}
+      {/* Top Bar */}
       <View style={styles.header}>
-        <Pressable onPress={() => navigation.goBack()}>
-          <Text style={styles.backText}> ← Restaurant</Text>
+        <Pressable onPress={() => navigation.goBack()} style={styles.tickButton}>
+          <View style={styles.tickCircle}>
+            <Ionicons name="arrow-back" size={20} color="#fff" />
+          </View>
         </Pressable>
-        <Text style={styles.address}>{address}</Text>
       </View>
 
       {/* Section Title */}
-      <Text style={styles.sectionTitle}>Vendors</Text>
+      <Text style={styles.sectionTitle}>Restaurants</Text>
 
-      {/* Vendor Card: Noni Foods (Clickable) */}
-      <Pressable
-        style={styles.vendorCard}
-        onPress={() => navigation.navigate('NoniFoodsScreen')}
-      >
-        <Text style={styles.vendorName}>Noni Foods</Text>
-        <Text style={styles.vendorStatus}>Delivering now</Text>
-      </Pressable>
-
-      {/* Vendor Card: Ada Kitchen (Not Delivering) */}
-      <View style={[styles.vendorCard, styles.lockedCard]}>
-        <Text style={styles.vendorName}>Ada Kitchen</Text>
-        <Text style={styles.vendorStatus}>Not delivering 🔒</Text>
-      </View>
+      {/* Restaurant List */}
+      <FlatList
+        data={restaurantData}
+        keyExtractor={(item) => item.id}
+        renderItem={renderCard}
+        contentContainerStyle={{ paddingBottom: 100 }}
+        showsVerticalScrollIndicator={false}
+      />
     </View>
   );
 };
@@ -47,46 +55,54 @@ export default RestaurantScreen;
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#f0fff5',
     paddingHorizontal: 16,
     paddingTop: 60,
-    backgroundColor: '#fff',
   },
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    marginBottom: 20,
   },
-  backText: {
-    fontSize: 16,
-    color: '#333',
-    fontWeight: '500',
+  tickButton: {
+    padding: 4,
   },
-  address: {
-    fontSize: 14,
-    color: '#666',
+  tickCircle: {
+    backgroundColor: '#1A4D2E', // dark green circle
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
   },
   sectionTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginVertical: 20,
-  },
-  vendorCard: {
-    backgroundColor: '#f5f5f5',
-    padding: 16,
-    borderRadius: 12,
+    fontSize: 22,
+    fontWeight: '600',
+    color: '#1A4D2E',
     marginBottom: 16,
   },
+  card: {
+    backgroundColor: '#D9F99D',
+    borderRadius: 12,
+    padding: 20,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    elevation: 4,
+  },
   vendorName: {
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 18,
+    fontWeight: '500',
+    color: '#2F3E46',
   },
   vendorStatus: {
     fontSize: 14,
-    color: '#777',
+    color: '#555',
     marginTop: 4,
-  },
-  lockedCard: {
-    backgroundColor: '#e0e0e0',
-    opacity: 0.5,
   },
 });

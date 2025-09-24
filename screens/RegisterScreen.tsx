@@ -18,7 +18,7 @@ type NavigationProp = NativeStackNavigationProp<RootStackParamList, 'Register'>;
 
 const RegisterScreen = () => {
   const navigation = useNavigation<NavigationProp>();
-  const { setUser, setAddress } = useUser(); // Make sure your UserContext has setUser
+  const { setUser, setAddress } = useUser();
 
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
@@ -34,21 +34,33 @@ const RegisterScreen = () => {
     }
 
     try {
+      // Check if email already exists in profiles
+      const { data: existingUser } = await supabaseClient
+        .from('profiles')
+        .select('id')
+        .eq('email', email)
+        .single();
+
+      if (existingUser) {
+        Alert.alert('Email Exists', 'This email is already registered. Please log in.');
+        return;
+      }
+
+      // Sign up user
       const { data: signUpData, error: signUpError } = await supabaseClient.auth.signUp({
         email,
         password,
       });
-
       if (signUpError) {
         Alert.alert('Signup Failed', signUpError.message);
         return;
       }
 
+      // Sign in user
       const { data: signInData, error: signInError } = await supabaseClient.auth.signInWithPassword({
         email,
         password,
       });
-
       if (signInError || !signInData.session || !signInData.user) {
         Alert.alert('Login Failed', signInError?.message || 'No session returned');
         return;
@@ -56,44 +68,42 @@ const RegisterScreen = () => {
 
       const userId = signInData.user.id;
 
-      const { error: insertError } = await supabaseClient
+      // Save profile (including email)
+      const { error: insertProfileError } = await supabaseClient
         .from('profiles')
         .insert([
           {
             id: userId,
+            email,
             full_name: fullName,
             phone_number: phoneNumber,
-            address: address,
+            address,
           },
         ]);
-
-      if (insertError) {
-        Alert.alert('Profile Error', insertError.message);
+      if (insertProfileError) {
+        Alert.alert('Profile Error', insertProfileError.message);
         return;
       }
-   
-// 📌 NEW BLOCK: Save into addresses table
-    const { error: addressInsertError } = await supabaseClient
-      .from('addresses')
-      .insert([
-        {
-          user_id: userId,
-          label: 'Home',
-          street: address,
-          city: '',     // Optional: split address later
-          state: '',
-          is_default: true,
-        },
-      ]);
 
-    if (addressInsertError) {
-      Alert.alert('Address Error', addressInsertError.message);
-      return;
-    }
+      // Save address
+      const { error: addressInsertError } = await supabaseClient
+        .from('addresses')
+        .insert([
+          {
+            user_id: userId,
+            label: 'Home',
+            street: address,
+            city: '',
+            state: '',
+            is_default: true,
+          },
+        ]);
+      if (addressInsertError) {
+        Alert.alert('Address Error', addressInsertError.message);
+        return;
+      }
 
-    
-
-      // ✅ Save to global user context
+      // Update user context
       setUser({
         id: userId,
         email,
@@ -167,6 +177,7 @@ const RegisterScreen = () => {
 
 export default RegisterScreen;
 
+// ✅ KEEP ALL STYLES EXACTLY AS BEFORE
 const styles = StyleSheet.create({
   container: {
     flexGrow: 1,
@@ -203,7 +214,7 @@ const styles = StyleSheet.create({
     height: 48,
   },
   toggle: {
-    color: '#006400', // green
+    color: '#006400',
     fontWeight: '600',
   },
   button: {

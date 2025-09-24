@@ -13,8 +13,7 @@ export default function LandingScreen() {
     <View style={styles.container}>
       <Text style={styles.title}>Welcome to Naili</Text>
       <Text style={styles.subtitle}>
-        We bring you Naili Shop, Connect, and Discover—all in one place.
-      </Text>
+     We bring you Naili: Food, Groceries, and More-delivered in one app.</Text>
 
       <TouchableOpacity
         style={styles.primaryButton}
