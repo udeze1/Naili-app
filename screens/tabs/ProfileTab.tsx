@@ -1,3 +1,4 @@
+// src/screens/profile/ProfileTab.tsx
 import React from 'react';
 import {
   View,
@@ -8,6 +9,7 @@ import {
   StyleSheet,
   Alert,
   Platform,
+  Linking,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -49,6 +51,20 @@ export default function ProfileTab() {
     });
   };
 
+  const openExternal = async (url: string) => {
+    try {
+      const supported = await Linking.canOpenURL(url);
+      if (!supported) {
+        Alert.alert('Cannot open link', url);
+        return;
+      }
+      await Linking.openURL(url);
+    } catch (err: any) {
+      console.error('Failed to open URL', err);
+      Alert.alert('Error', 'Unable to open link.');
+    }
+  };
+
   return (
     <ScrollView style={styles.container}>
       {/* Header */}
@@ -78,19 +94,23 @@ export default function ProfileTab() {
       {/* App */}
       <Text style={styles.sectionTitle}>App</Text>
       <Option label="FAQ" icon="help-circle" />
-      <Option label="Contact Us" icon="phone" />
+      <Option
+        label="Contact Us"
+        icon="phone"
+        onPress={() => openExternal('https://naili.com.ng/contact.html')}
+      />
 
       {/* Legal */}
       <Text style={styles.sectionTitle}>Legal</Text>
       <Option
         label="Terms & Conditions"
         icon="file-text"
-        onPress={() => navigation.navigate('TermsScreen')}
+        onPress={() => openExternal('https://naili.com.ng/terms.html')}
       />
       <Option
         label="Privacy Policy"
         icon="shield"
-        onPress={() => navigation.navigate('PrivacyScreen')}
+        onPress={() => openExternal('https://naili.com.ng/privacy.html')}
       />
 
       {/* Footer */}
