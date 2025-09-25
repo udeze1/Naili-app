@@ -12,80 +12,93 @@ import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../appTypes/Navigation';
 import { supabaseClient } from '../lib/supabase';
-import { useUser } from '../context/UserContext';
 
 type NavProp = NativeStackNavigationProp<RootStackParamList, 'Login'>;
 
 export default function LoginScreen() {
   const navigation = useNavigation<NavProp>();
-  const { setUser, setAddress } = useUser();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
- const handleLogin = async () => {
-  if (!email || !password) {
-    Alert.alert('Missing Info', 'Please enter both email and password');
-    return;
-  }
+  const handleLogin = async () => {
+    if (!email || !password) {
+      Alert.alert('Missing Info', 'Please enter both email and password');
+      return;
+    }
 
-  setLoading(true);
+    setLoading(true);
 
-  const { data: loginData, error } = await supabaseClient.auth.signInWithPassword({
-    email,
-    password,
-  });
+    try {
+      // 1️⃣ Sign in with Supabase
+      const { data: loginData, error } = await supabaseClient.auth.signInWithPassword({
+        email,
+        password,
+      });
 
-  if (error || !loginData.user) {
-    setLoading(false);
-    Alert.alert('Login Failed', error?.message || 'Something went wrong');
-    return;
-  }
+      if (error || !loginData.user) {
+        setLoading(false);
+        Alert.alert('Login Failed', error?.message || 'Something went wrong');
+        return;
+      }
 
-  const userId = loginData.user.id;
+      const userId = loginData.user.id;
 
-  // ✅ Fetch user profile info
-  const { data: profile, error: profileError } = await supabaseClient
-    .from('profiles')
-    .select('*')
-    .eq('id', userId)
-    .single();
+      // 2️⃣ Fetch user profile
+      const { data: profile, error: profileError } = await supabaseClient
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .single();
 
-  if (profileError || !profile) {
-    setLoading(false);
-    Alert.alert('Error', 'Could not fetch user profile');
-    return;
-  }
+      if (profileError || !profile) {
+        setLoading(false);
+        Alert.alert('Error', 'Could not fetch user profile');
+        return;
+      }
 
-  // ✅ Fetch default address
-  const { data: addressData, error: addressError } = await supabaseClient
-    .from('addresses')
-    .select('*')
-    .eq('user_id', userId)
-    .eq('is_default', true)
-    .limit(1)
-    .single();
+      // 3️⃣ Fetch default address
+      const { data: addressData } = await supabaseClient
+        .from('addresses')
+        .select('*')
+        .eq('user_id', userId)
+        .eq('is_default', true)
+        .limit(1)
+        .single();
 
-  if (addressError) {
-    console.warn('Address fetch error:', addressError.message);
-  }
+      // 4️⃣ Generate OTP
+      const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
 
-  // ✅ Set global user and address
-  setUser({
-    id: userId,
-    email: loginData.user.email!,
-    full_name: profile.full_name,
-    phone_number: profile.phone_number,
-    address: profile.address,
-  });
+      // 5️⃣ Save OTP in Supabase table
+      await supabaseClient.from('otps').insert([
+        {
+          email,
+          phone_number: profile.phone_number,
+          code: otpCode,
+          expires_at: new Date(Date.now() + 5 * 60000), // 5 min expiry
+        },
+      ]);
 
-  setAddress(addressData?.street || profile.address || '');
+      // 6️⃣ Send OTP via Supabase Edge Function
+      await fetch('https://swqcxwhcxddivtacyyff.functions.supabase.co/send-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, phoneNumber: profile.phone_number, code: otpCode }),
+      });
 
-  setLoading(false);
-  navigation.replace('MainTabs');
-};
+      setLoading(false);
+
+      // 7️⃣ Navigate to OTP screen (user context will be set after verification)
+      navigation.replace('OTP', { email, phoneNumber: profile.phone_number });
+
+    } catch (err) {
+      console.error(err);
+      setLoading(false);
+      Alert.alert('Unexpected Error', 'Please try again later');
+    }
+  };
 
   const handleForgotPassword = async () => {
     if (!email) {
