@@ -11,7 +11,6 @@ import {
   KeyboardAvoidingView,
   Platform,
   TouchableWithoutFeedback,
-  Dimensions,
   ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -19,12 +18,16 @@ import { useUser } from '../context/UserContext';
 import { useCart } from '../context/CartContext';
 import { confirmOrder } from '../services/cart';
 import { supabaseClient } from '../lib/supabase';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, CompositeNavigationProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { HomeTabStackParamList } from './tabs/HomeTabStack';
+import { RootStackParamList } from '../appTypes/Navigation';
 import { Swipeable } from 'react-native-gesture-handler';
 
-type CartScreenNavProp = NativeStackNavigationProp<HomeTabStackParamList, 'CartScreen'>;
+type CartScreenNavProp = CompositeNavigationProp<
+  NativeStackNavigationProp<HomeTabStackParamList, 'CartScreen'>,
+  NativeStackNavigationProp<RootStackParamList>
+>;
 
 export default function CartScreen() {
   const { user } = useUser();
@@ -38,7 +41,7 @@ export default function CartScreen() {
   const [deliveryNote, setDeliveryNote] = useState('');
   const [activeTab, setActiveTab] = useState<'orders' | 'delivery'>('orders');
 
-  const deliveryFee = 1500;
+  const deliveryFee = 1000;
 
   useEffect(() => {
     const fetchProducts = async () => {
@@ -81,13 +84,14 @@ export default function CartScreen() {
   const totalPayable = itemTotal + deliveryFee;
 
   const handleConfirmOrder = async () => {
-    if (!deliveryAddress || !deliveryPhone) {
-      alert('Please enter address and phone number');
+    if (!user) {
+      alert('Please create an account to continue.');
+      navigation.navigate('Register');
       return;
     }
 
-    if (!user) {
-      alert('User not logged in');
+    if (!deliveryAddress || !deliveryPhone) {
+      alert('Please enter address and phone number');
       return;
     }
 
@@ -95,8 +99,6 @@ export default function CartScreen() {
       alert('Your cart is empty');
       return;
     }
-
-    const isMockUser = __DEV__ || user.id === '00000000-0000-0000-0000-000000000001';
 
     const result = await confirmOrder({
       userId: user.id,
@@ -106,10 +108,10 @@ export default function CartScreen() {
       delivery_note: deliveryNote,
     });
 
-    if (result?.orderId || isMockUser) {
+    if (result?.orderId) {
       navigation.navigate('PaymentOptionScreen', {
         amount: Number(totalPayable),
-        orderId: String(result?.orderId || 'mock-order-id'),
+        orderId: String(result?.orderId),
       });
     } else {
       alert('Failed to place order. Try again.');
@@ -146,11 +148,7 @@ export default function CartScreen() {
             <Text style={styles.itemText}>
               {item.name} x {localCart[item.id]}
             </Text>
-            {item.brand && (
-              <Text style={styles.brandText}>
-                From: {item.brand}
-              </Text>
-            )}
+            {item.brand && <Text style={styles.brandText}>From: {item.brand}</Text>}
           </View>
         </View>
         <Text style={styles.itemPrice}>
@@ -167,7 +165,6 @@ export default function CartScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 80 : 0}
       >
-        {/* Header */}
         <View style={styles.header}>
           <View style={styles.headerLeft}>
             <TouchableOpacity onPress={() => navigation.goBack()} style={{ marginRight: 8 }}>
@@ -175,7 +172,6 @@ export default function CartScreen() {
             </TouchableOpacity>
             <Text style={styles.heading}>Your Cart</Text>
           </View>
-
           {activeTab === 'orders' && productsInCart.length > 0 && (
             <TouchableOpacity onPress={clearCart}>
               <Ionicons name="trash-outline" size={22} color="#EF4444" />
@@ -183,37 +179,22 @@ export default function CartScreen() {
           )}
         </View>
 
-        {/* Tab Switcher */}
+        {/* Tab Switcher - always show both tabs */}
         <View style={styles.tabContainer}>
           <TouchableOpacity
-            style={[
-              styles.tabButton,
-              activeTab === 'orders' && styles.activeTab,
-            ]}
+            style={[styles.tabButton, activeTab === 'orders' && styles.activeTab]}
             onPress={() => setActiveTab('orders')}
           >
-            <Text
-              style={[
-                styles.tabText,
-                activeTab === 'orders' && styles.activeTabText,
-              ]}
-            >
+            <Text style={[styles.tabText, activeTab === 'orders' && styles.activeTabText]}>
               Your Orders
             </Text>
           </TouchableOpacity>
+
           <TouchableOpacity
-            style={[
-              styles.tabButton,
-              activeTab === 'delivery' && styles.activeTab,
-            ]}
+            style={[styles.tabButton, activeTab === 'delivery' && styles.activeTab]}
             onPress={() => setActiveTab('delivery')}
           >
-            <Text
-              style={[
-                styles.tabText,
-                activeTab === 'delivery' && styles.activeTabText,
-              ]}
-            >
+            <Text style={[styles.tabText, activeTab === 'delivery' && styles.activeTabText]}>
               Delivery Info
             </Text>
           </TouchableOpacity>
@@ -256,6 +237,7 @@ export default function CartScreen() {
               </>
             )
           ) : (
+            // Delivery Info tab content - always visible, but input only editable if user exists
             <>
               <Text style={styles.deliveryLabel}>Delivery Address</Text>
               <TextInput
@@ -264,6 +246,7 @@ export default function CartScreen() {
                 onChangeText={setDeliveryAddress}
                 placeholder="Enter delivery address"
                 placeholderTextColor="#999"
+                editable={!!user}
                 multiline
               />
 
@@ -275,6 +258,7 @@ export default function CartScreen() {
                 placeholder="Enter phone number"
                 placeholderTextColor="#999"
                 keyboardType="phone-pad"
+                editable={!!user}
               />
 
               <Text style={styles.deliveryLabel}>Delivery Note</Text>
@@ -284,12 +268,18 @@ export default function CartScreen() {
                 onChangeText={setDeliveryNote}
                 placeholder="Optional note (e.g., drop at gate)"
                 placeholderTextColor="#999"
+                editable={!!user}
               />
+
+              {!user && (
+                <Text style={{ textAlign: 'center', color: 'green', marginTop: 8 }}>
+                  Login or Register to edit delivery info
+                </Text>
+              )}
             </>
           )}
         </ScrollView>
 
-        {/* Confirm Button */}
         <TouchableOpacity
           onPress={handleConfirmOrder}
           style={[styles.button, { opacity: totalCount > 0 ? 1 : 0.5 }]}
@@ -309,96 +299,27 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 12,
     justifyContent: 'space-between',
-    paddingTop: Platform.OS === 'ios' ? 44 : 20, // ✅ push below status bar
+    paddingTop: Platform.OS === 'ios' ? 44 : 20,
     paddingHorizontal: 8,
     backgroundColor: '#fff',
   },
-  headerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
+  headerLeft: { flexDirection: 'row', alignItems: 'center' },
   heading: { fontSize: 22, fontWeight: 'bold' },
   tabContainer: { flexDirection: 'row', marginBottom: 10 },
-  tabButton: {
-    flex: 1,
-    paddingVertical: 10,
-    borderBottomWidth: 2,
-    borderColor: '#ccc',
-    alignItems: 'center',
-  },
+  tabButton: { flex: 1, paddingVertical: 10, borderBottomWidth: 2, borderColor: '#ccc', alignItems: 'center' },
   activeTab: { borderColor: '#065f46' },
   tabText: { fontSize: 15, color: '#666' },
   activeTabText: { fontWeight: 'bold', color: '#065f46' },
-  item: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 12,
-    paddingBottom: 8,
-    borderBottomWidth: 1,
-    borderColor: '#eee',
-    alignItems: 'center',
-  },
-  itemText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#111827',
-    flexShrink: 1,
-    flexWrap: 'wrap', // ✅ wrap long text
-  },
+  item: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12, paddingBottom: 8, borderBottomWidth: 1, borderColor: '#eee', alignItems: 'center' },
+  itemText: { fontSize: 16, fontWeight: '600', color: '#111827', flexShrink: 1, flexWrap: 'wrap' },
   itemPrice: { fontWeight: 'bold', fontSize: 16, color: '#065f46', marginLeft: 8 },
-  brandText: {
-    fontStyle: 'italic',
-    color: '#888',
-    fontSize: 13,
-    marginTop: 2,
-    flexWrap: 'wrap', // ✅ wrap brand
-  },
-  placeholderImage: {
-    width: 48,
-    height: 48,
-    borderRadius: 6,
-    backgroundColor: '#f3f4f6',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  deliveryLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    marginBottom: 4,
-    marginTop: 10,
-    color: '#065f46',
-  },
-  input: {
-    backgroundColor: '#fdfde1',
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 15,
-    color: '#222',
-    borderWidth: 1,
-    borderColor: '#ccc',
-    marginBottom: 12,
-  },
-  summaryRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 4,
-  },
+  brandText: { fontStyle: 'italic', color: '#888', fontSize: 13, marginTop: 2, flexWrap: 'wrap' },
+  placeholderImage: { width: 48, height: 48, borderRadius: 6, backgroundColor: '#f3f4f6', justifyContent: 'center', alignItems: 'center' },
+  deliveryLabel: { fontSize: 13, fontWeight: '600', marginBottom: 4, marginTop: 10, color: '#065f46' },
+  input: { backgroundColor: '#fdfde1', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, color: '#222', borderWidth: 1, borderColor: '#ccc', marginBottom: 12 },
+  summaryRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 },
   summaryText: { fontSize: 15, color: '#111827' },
-  button: {
-    marginTop: 12,
-    backgroundColor: '#facc15',
-    padding: 14,
-    borderRadius: 10,
-    alignItems: 'center',
-  },
+  button: { marginTop: 12, backgroundColor: '#facc15', padding: 14, borderRadius: 10, alignItems: 'center' },
   buttonText: { fontWeight: 'bold', fontSize: 16, color: '#065f46' },
-  deleteAction: {
-    backgroundColor: '#EF4444',
-    justifyContent: 'center',
-    alignItems: 'center',
-    width: 64,
-    borderRadius: 6,
-    marginVertical: 4,
-  },
+  deleteAction: { backgroundColor: '#ef4444ff', justifyContent: 'center', alignItems: 'center', width: 64, borderRadius: 6, marginVertical: 4 },
 });

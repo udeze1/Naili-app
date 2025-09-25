@@ -1,9 +1,9 @@
 export type RootStackParamList = {
   Landing: undefined;
   Register: undefined;
-  //OTP?: { phoneNumber?: string };
+  OTP?: { email?:string,  phoneNumber?: string };
   Login: undefined;
-MainTabs: undefined;
+MainTabs:  { isGuest: boolean } | undefined;
 
   
 

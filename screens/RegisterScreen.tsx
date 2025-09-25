@@ -28,25 +28,33 @@ const RegisterScreen = () => {
   const [showPassword, setShowPassword] = useState(false);
 
   const handleRegister = async () => {
-    if (!email || !password || !fullName || !phoneNumber || !address) {
-      Alert.alert('Missing Info', 'Please fill all fields');
+    // ✅ Require either email or phone number
+    if (!fullName || !password || !address || (!email && !phoneNumber)) {
+      Alert.alert('Missing Info', 'Please fill all required fields (Full name, Password, Address, Email or Phone)');
       return;
     }
 
     try {
-      // Check if email already exists in profiles
-      const { data: existingUser } = await supabaseClient
-        .from('profiles')
-        .select('id')
-        .eq('email', email)
-        .single();
+      // Check if email exists (only if email provided)
+      if (email) {
+        const { data: existingUser } = await supabaseClient
+          .from('profiles')
+          .select('id')
+          .eq('email', email)
+          .single();
 
-      if (existingUser) {
-        Alert.alert('Email Exists', 'This email is already registered. Please log in.');
+        if (existingUser) {
+          Alert.alert('Email Exists', 'This email is already registered. Please log in.');
+          return;
+        }
+      }
+
+      // Sign up with Supabase (email required for auth)
+      if (!email) {
+        Alert.alert('Email Required', 'You must provide an email to create an account.');
         return;
       }
 
-      // Sign up user
       const { data: signUpData, error: signUpError } = await supabaseClient.auth.signUp({
         email,
         password,
@@ -56,19 +64,19 @@ const RegisterScreen = () => {
         return;
       }
 
-      // Sign in user
+      // Sign in immediately
       const { data: signInData, error: signInError } = await supabaseClient.auth.signInWithPassword({
         email,
         password,
       });
-      if (signInError || !signInData.session || !signInData.user) {
+      if (signInError || !signInData.user) {
         Alert.alert('Login Failed', signInError?.message || 'No session returned');
         return;
       }
 
       const userId = signInData.user.id;
 
-      // Save profile (including email)
+      // Insert profile
       const { error: insertProfileError } = await supabaseClient
         .from('profiles')
         .insert([
@@ -85,7 +93,7 @@ const RegisterScreen = () => {
         return;
       }
 
-      // Save address
+      // Insert default address
       const { error: addressInsertError } = await supabaseClient
         .from('addresses')
         .insert([
@@ -103,17 +111,30 @@ const RegisterScreen = () => {
         return;
       }
 
-      // Update user context
-      setUser({
-        id: userId,
-        email,
-        full_name: fullName,
-        phone_number: phoneNumber,
-        address,
-      });
-      setAddress(address);
+      // ✅ Generate OTP
+      const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
 
-      navigation.replace('MainTabs');
+      // Save OTP in Supabase table
+      await supabaseClient.from('otps').insert([
+        {
+          email,
+          phone_number: phoneNumber,
+          code: otpCode,
+          expires_at: new Date(Date.now() + 5 * 60000), // 5 min expiry
+          is_used: false,
+        },
+      ]);
+
+      // Send OTP via Supabase Edge Function
+      await fetch('https://swqcxwhcxddivtacyyff.functions.supabase.co/send-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, phoneNumber, code: otpCode }),
+      });
+
+      // Navigate to OTP screen
+      navigation.replace('OTP', { email, phoneNumber });
+
     } catch (err) {
       console.error(err);
       Alert.alert('Unexpected Error', 'Please try again later');
@@ -121,118 +142,82 @@ const RegisterScreen = () => {
   };
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
-      <Text style={styles.header}>Create an Account</Text>
+    <View style={{ flex: 1 }}>
+      <TouchableOpacity
+        style={styles.guestButton}
+        onPress={() => navigation.replace('MainTabs', { isGuest: true })}
+      >
+        <Text style={styles.guestText}>Continue as Guest</Text>
+      </TouchableOpacity>
 
-      <TextInput
-        style={styles.input}
-        placeholder="Full Name"
-        value={fullName}
-        onChangeText={setFullName}
-      />
-      <TextInput
-        style={styles.input}
-        placeholder="Email"
-        autoCapitalize="none"
-        keyboardType="email-address"
-        value={email}
-        onChangeText={setEmail}
-      />
-      <TextInput
-        style={styles.input}
-        placeholder="Phone Number"
-        keyboardType="phone-pad"
-        value={phoneNumber}
-        onChangeText={setPhoneNumber}
-      />
-      <View style={styles.passwordContainer}>
+      <ScrollView contentContainerStyle={styles.container}>
+        <Text style={styles.header}>Create an Account</Text>
+
         <TextInput
-          style={styles.passwordInput}
-          placeholder="Password"
-          secureTextEntry={!showPassword}
-          value={password}
-          onChangeText={setPassword}
+          style={styles.input}
+          placeholder="Full Name"
+          value={fullName}
+          onChangeText={setFullName}
         />
-        <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
-          <Text style={styles.toggle}>{showPassword ? 'Hide' : 'Show'}</Text>
+        <TextInput
+          style={styles.input}
+          placeholder="Email (optional if phone provided)"
+          autoCapitalize="none"
+          keyboardType="email-address"
+          value={email}
+          onChangeText={setEmail}
+        />
+        <TextInput
+          style={styles.input}
+          placeholder="Phone Number (optional if email provided)"
+          keyboardType="phone-pad"
+          value={phoneNumber}
+          onChangeText={setPhoneNumber}
+        />
+        <View style={styles.passwordContainer}>
+          <TextInput
+            style={styles.passwordInput}
+            placeholder="Password"
+            secureTextEntry={!showPassword}
+            value={password}
+            onChangeText={setPassword}
+          />
+          <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
+            <Text style={styles.toggle}>{showPassword ? 'Hide' : 'Show'}</Text>
+          </TouchableOpacity>
+        </View>
+        <TextInput
+          style={styles.input}
+          placeholder="Address"
+          value={address}
+          onChangeText={updateAddress}
+        />
+
+        <TouchableOpacity style={styles.button} onPress={handleRegister}>
+          <Text style={styles.buttonText}>Register</Text>
         </TouchableOpacity>
-      </View>
-      <TextInput
-        style={styles.input}
-        placeholder="Address"
-        value={address}
-        onChangeText={updateAddress}
-      />
 
-      <TouchableOpacity style={styles.button} onPress={handleRegister}>
-        <Text style={styles.buttonText}>Register</Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity onPress={() => navigation.navigate('Login')}>
-        <Text style={styles.loginLink}>Already have an account? Log in</Text>
-      </TouchableOpacity>
-    </ScrollView>
+        <TouchableOpacity onPress={() => navigation.navigate('Login')}>
+          <Text style={styles.loginLink}>Already have an account? Log in</Text>
+        </TouchableOpacity>
+      </ScrollView>
+    </View>
   );
 };
 
 export default RegisterScreen;
 
-// ✅ KEEP ALL STYLES EXACTLY AS BEFORE
+// ✅ Styles remain the same
 const styles = StyleSheet.create({
-  container: {
-    flexGrow: 1,
-    backgroundColor: '#fff',
-    padding: 24,
-    justifyContent: 'center',
-  },
-  header: {
-    fontSize: 26,
-    fontWeight: 'bold',
-    marginBottom: 24,
-    color: '#006400', // green
-    textAlign: 'center',
-  },
-  input: {
-    height: 48,
-    borderWidth: 1,
-    borderColor: '#CCCCCC',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    marginBottom: 16,
-  },
-  passwordContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#CCCCCC',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    marginBottom: 16,
-  },
-  passwordInput: {
-    flex: 1,
-    height: 48,
-  },
-  toggle: {
-    color: '#006400',
-    fontWeight: '600',
-  },
-  button: {
-    backgroundColor: '#FFD700', // yellow
-    paddingVertical: 14,
-    borderRadius: 8,
-    alignItems: 'center',
-    marginTop: 8,
-  },
-  buttonText: {
-    color: '#006400',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  loginLink: {
-    marginTop: 20,
-    color: '#006400',
-    textAlign: 'center',
-    fontWeight: '500',
-  },
+  container: { flexGrow: 1, backgroundColor: '#fff', padding: 24, justifyContent: 'center' },
+  header: { fontSize: 26, fontWeight: 'bold', marginBottom: 24, color: '#006400', textAlign: 'center' },
+  input: { height: 48, borderWidth: 1, borderColor: '#CCCCCC', borderRadius: 8, paddingHorizontal: 12, marginBottom: 16 },
+  passwordContainer: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: '#CCCCCC', borderRadius: 8, paddingHorizontal: 12, marginBottom: 16 },
+  passwordInput: { flex: 1, height: 48 },
+  toggle: { color: '#006400', fontWeight: '600' },
+  button: { backgroundColor: '#FFD700', paddingVertical: 14, borderRadius: 8, alignItems: 'center', marginTop: 8 },
+  buttonText: { color: '#006400', fontSize: 16, fontWeight: 'bold' },
+  loginLink: { marginTop: 20, color: '#006400', textAlign: 'center', fontWeight: '500' },
+  guestButton: { position: 'absolute', top: 10, left: 10, paddingVertical: 6, paddingHorizontal: 12, borderRadius: 6, borderWidth: 1.5, borderColor: '#006400', backgroundColor: '#fff', zIndex: 10 },
+  guestText: { color: '#006400', fontSize: 14, fontWeight: '600' },
 });

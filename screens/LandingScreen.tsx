@@ -11,19 +11,32 @@ export default function LandingScreen() {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Welcome to Naili</Text>
-      <Text style={styles.subtitle}>
-     We bring you Naili: Food, Groceries, and More-delivered in one app.</Text>
-
+      {/* Guest button at top-left */}
       <TouchableOpacity
-        style={styles.primaryButton}
-        onPress={() => navigation.navigate('Register')}>
-        <Text style={styles.primaryText}>Get Started</Text>
+        style={styles.guestButton}
+        onPress={() => navigation.navigate('MainTabs', { isGuest: true })}
+      >
+        <Text style={styles.guestText}>Continue as Guest</Text>
       </TouchableOpacity>
 
-      <TouchableOpacity onPress={() => navigation.navigate('Login')}>
-        <Text style={styles.link}>Already have an account? Log in</Text>
-      </TouchableOpacity>
+      <View style={styles.content}>
+        <Text style={styles.title}>Welcome to Naili</Text>
+        <Text style={styles.subtitle}>
+          We bring you Naili: Food, Groceries, and More-delivered in one app.
+        </Text>
+
+        {/* Existing buttons */}
+        <TouchableOpacity
+          style={styles.primaryButton}
+          onPress={() => navigation.navigate('Register')}
+        >
+          <Text style={styles.primaryText}>Get Started</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity onPress={() => navigation.navigate('Login')}>
+          <Text style={styles.link}>Already have an account? Log in</Text>
+        </TouchableOpacity>
+      </View>
     </View>
   );
 }
@@ -31,17 +44,35 @@ export default function LandingScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
     padding: 20,
     backgroundColor: '#fff',
+  },
+  guestButton: {
+    position: 'absolute',
+    top: 20,
+    left: 20,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+    borderWidth: 1.5,
+    borderColor: '#006400',
+  },
+  guestText: {
+    color: '#006400',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  content: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   title: {
     fontSize: 28,
     fontWeight: 'bold',
     marginBottom: 12,
     textAlign: 'center',
-    color: '#006400', // deep green
+    color: '#006400',
   },
   subtitle: {
     fontSize: 16,
@@ -50,19 +81,20 @@ const styles = StyleSheet.create({
     color: '#555',
   },
   primaryButton: {
-    backgroundColor: '#FFD700', // bright yellow
+    backgroundColor: '#FFD700',
     paddingVertical: 14,
     paddingHorizontal: 32,
     borderRadius: 8,
+    marginBottom: 12,
   },
   primaryText: {
-    color: '#006400', // deep green
+    color: '#006400',
     fontSize: 18,
     fontWeight: '600',
   },
   link: {
-    color: '#006400', // deep green
-    marginTop: 16,
+    color: '#006400',
+    marginBottom: 16,
     fontSize: 16,
   },
 });
