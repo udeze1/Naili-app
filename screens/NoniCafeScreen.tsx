@@ -140,14 +140,18 @@ export default function NoniCafeScreen() {
         <Text style={styles.title}>Noni Café</Text>
       </TouchableOpacity>
 
-      <Text style={styles.energyHeader}>☕ Blessed by Naili Energy</Text>
-      <Text style={styles.quote}>“egwu dị ndụ na café a”</Text>
+      <Text style={styles.energyHeader}> Powered by Naili.</Text>
+      <Text style={styles.quote}>“☕ Brewed For Happiness”</Text>
 
       {loading ? (
         <ActivityIndicator size="large" color="#14532D" style={{ marginTop: 40 }} />
       ) : (
         <ScrollView contentContainerStyle={styles.list}>
-          {products.map((item) => renderItem({ item }))}
+          {products.map((item) => (
+            <View key={item.id}>
+            {renderItem({ item })}
+            </View>
+          ))}
         </ScrollView>
       )}
 

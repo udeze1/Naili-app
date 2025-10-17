@@ -270,5 +270,5 @@ const styles = StyleSheet.create({
   foodBrand: { fontSize: 14, color: '#888', marginTop: 2 },
   foodPrice: { fontSize: 14, color: '#0A9D4C', marginTop: 4 },
   emptyPrompt: { marginTop: 40, alignItems: 'center' },
-  emptyText: { fontSize: 16, color: '#999', fontStyle: 'italic' },
+  emptyText: { fontSize: 16, color: '#231818ff', fontStyle: 'italic', marginTop: 100, },
 });

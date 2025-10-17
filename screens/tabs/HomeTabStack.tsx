@@ -16,7 +16,7 @@ import NoniBurgerScreen from '../NoniBurgerScreen';
 
 import CartScreen from '../CartScreen';
 import DeliveryAddressScreen from '../DeliveryAddressScreen';
-import MoreScreen from '../MoreScreen';
+import GroupOrderScreen from '../GroupOrderScreen';
 import PaymentOptionScreen from '../PaymentOptionScreen';
 
 export type HomeTabStackParamList = {
@@ -43,7 +43,7 @@ export type HomeTabStackParamList = {
   }
 
 CustomerFeedbackScreen: undefined;
-  MoreScreen: undefined;
+  GroupOrderScreen: { groupOrderId: string; userId: string};
 };
 
 const Stack = createNativeStackNavigator<HomeTabStackParamList>();
@@ -81,7 +81,7 @@ const HomeTabStack = () => {
 
 
       {/* 🎯 Feedback / More */}
-      <Stack.Screen name="MoreScreen" component={MoreScreen} />
+      <Stack.Screen name="GroupOrderScreen" component={GroupOrderScreen} />
     </Stack.Navigator>
   );
 };

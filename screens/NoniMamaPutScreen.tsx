@@ -139,16 +139,21 @@ export default function NoniMamaPutScreen() {
         <Text style={styles.title}>Noni Mama Put</Text>
       </TouchableOpacity>
 
-      <Text style={styles.energyHeader}>🍲 Ọnụ gị agaghị echefu ya</Text>
-      <Text style={styles.quote}>“Nri nne bu ofe ndụ — o na-agwọ ahụ n'anya.”</Text>
+      <Text style={styles.energyHeader}> Powered by Naili.</Text>
+      <Text style={styles.quote}>“🍲Taste of Tradition”</Text>
 
       {loading ? (
-        <ActivityIndicator size="large" color="#14532D" style={{ marginTop: 40 }} />
-      ) : (
-        <ScrollView contentContainerStyle={styles.list}>
-          {products.map((item) => renderItem({ item }))}
-        </ScrollView>
-      )}
+              <ActivityIndicator size="large" color="#14532D" style={{ marginTop: 40 }} />
+            ) : (
+              <ScrollView contentContainerStyle={styles.list}>
+                {products.map((item) => (
+                  <View key={item.id}>
+                  {renderItem({ item })}
+                  </View>
+                ))}
+              </ScrollView>
+            )}
+      
 
       {totalCount > 0 && (
         <View style={styles.checkoutBar}>

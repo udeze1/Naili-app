@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, Pressable, StyleSheet, FlatList } from 'react-native';
+import { View, Text, Pressable, StyleSheet, FlatList, Image } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { HomeTabStackParamList } from './tabs/HomeTabStack';
@@ -7,8 +7,18 @@ import { Ionicons } from '@expo/vector-icons'; // Tick icon
 
 type NavigationProp = NativeStackNavigationProp<HomeTabStackParamList, 'RestaurantScreen'>;
 
+// Define allowed screens to remove TS red lines
+type NonifoodsScreens =
+  | 'NoniFoodsScreen'
+  | 'NoniBurgerScreen'
+  | 'NoniRiceScreen'
+  | 'NoniCafeScreen'
+  | 'NoniSoupScreen'
+  | 'NoniMamaPutScreen'
+  | 'NoniBBQScreen';
+
 const restaurantData = [
-  { id: '1', name: 'Noni Foods', screen: 'NoniFoodsScreen', status: 'Delivering now' },
+  { id: '1', name: 'Noni Foods⭐', screen: 'NoniFoodsScreen', status: 'Delivering now' },
 ];
 
 const RestaurantScreen = () => {
@@ -17,7 +27,9 @@ const RestaurantScreen = () => {
   const renderCard = ({ item }: { item: typeof restaurantData[0] }) => (
     <Pressable
       style={styles.card}
-      onPress={() => navigation.navigate('NoniFoodsScreen')}
+      onPress={() =>
+        navigation.navigate(item.screen as NonifoodsScreens) // TS-friendly
+      }
     >
       <Text style={styles.vendorName}>{item.name}</Text>
       <Text style={styles.vendorStatus}>{item.status}</Text>
@@ -26,17 +38,27 @@ const RestaurantScreen = () => {
 
   return (
     <View style={styles.container}>
+      {/* Big Bike Illusion */}
+      <View
+        style={styles.bikeContainer}
+        pointerEvents="none" // touches pass through
+      >
+        <Image
+          source={require('../assets/bike-man.png')}
+          style={styles.bikeImage}
+          resizeMode="contain"
+        />
+      </View>
+
       {/* Top Bar */}
       <View style={styles.header}>
         <Pressable onPress={() => navigation.goBack()} style={styles.tickButton}>
           <View style={styles.tickCircle}>
-            <Ionicons name="arrow-back" size={20} color="#fff" />
+            <Ionicons name="arrow-back" size={20} color="#014416ff" />
           </View>
         </Pressable>
+        <Text style={styles.headerTitle}>Restaurants</Text>
       </View>
-
-      {/* Section Title */}
-      <Text style={styles.sectionTitle}>Restaurants</Text>
 
       {/* Restaurant List */}
       <FlatList
@@ -55,9 +77,23 @@ export default RestaurantScreen;
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f0fff5',
+    backgroundColor: 'white', // white background
     paddingHorizontal: 16,
     paddingTop: 60,
+  },
+  bikeContainer: {
+    position: 'absolute',
+    top: '65%',
+    left: '50%',
+    transform: [{ translateX: -150 }, { translateY: -150 }],
+    width: 300,
+    height: 300,
+    opacity: 10, // subtle illusion
+    zIndex: 0, // behind other content
+  },
+  bikeImage: {
+    width: '100%',
+    height: '100%',
   },
   header: {
     flexDirection: 'row',
@@ -68,7 +104,7 @@ const styles = StyleSheet.create({
     padding: 4,
   },
   tickCircle: {
-    backgroundColor: '#1A4D2E', // dark green circle
+    //backgroundColor: '#1A4D2E', // dark green circle
     width: 36,
     height: 36,
     borderRadius: 18,
@@ -79,30 +115,33 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
   },
-  sectionTitle: {
+  headerTitle: {
     fontSize: 22,
     fontWeight: '600',
     color: '#1A4D2E',
-    marginBottom: 16,
+    marginLeft: 12,
   },
   card: {
-    backgroundColor: '#D9F99D',
+    backgroundColor: '#ffffff', // green card text
     borderRadius: 12,
     padding: 20,
     marginBottom: 16,
-    shadowColor: '#000',
-    shadowOpacity: 0.1,
+    shadowColor: '#949c93ff',
+    shadowOpacity: 80,
     shadowRadius: 6,
     elevation: 4,
+
   },
   vendorName: {
     fontSize: 18,
     fontWeight: '500',
-    color: '#2F3E46',
+    color: '#293527ff',
+    fontStyle: 'italic',
   },
   vendorStatus: {
     fontSize: 14,
     color: '#555',
     marginTop: 4,
+    fontStyle: 'italic',
   },
 });

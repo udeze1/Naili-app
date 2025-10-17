@@ -7,12 +7,14 @@ import {
   TouchableOpacity,
   StyleSheet,
   ScrollView,
+  Linking,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../appTypes/Navigation';
 import { useUser } from '../context/UserContext';
 import { supabaseClient } from '../lib/supabase';
+import { sendOtp } from '../services/sendOtp';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList, 'Register'>;
 
@@ -26,16 +28,24 @@ const RegisterScreen = () => {
   const [password, setPassword] = useState('');
   const [address, updateAddress] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [termsAgreed, setTermsAgreed] = useState(false);
 
   const handleRegister = async () => {
-    // ✅ Require either email or phone number
     if (!fullName || !password || !address || (!email && !phoneNumber)) {
       Alert.alert('Missing Info', 'Please fill all required fields (Full name, Password, Address, Email or Phone)');
       return;
     }
 
+    if (!termsAgreed) {
+      Alert.alert('Terms Required', 'You must agree to the Terms & Conditions and Privacy Policy to continue.');
+      return;
+    }
+
+    setLoading(true);
+
     try {
-      // Check if email exists (only if email provided)
+      // ✅ Check if user already exists
       if (email) {
         const { data: existingUser } = await supabaseClient
           .from('profiles')
@@ -45,135 +55,74 @@ const RegisterScreen = () => {
 
         if (existingUser) {
           Alert.alert('Email Exists', 'This email is already registered. Please log in.');
+          setLoading(false);
           return;
         }
       }
 
-      // Sign up with Supabase (email required for auth)
-      if (!email) {
-        Alert.alert('Email Required', 'You must provide an email to create an account.');
-        return;
-      }
-
-      const { data: signUpData, error: signUpError } = await supabaseClient.auth.signUp({
+      // 🚀 Send OTP via Netlify + Brevo
+      const otpResponse = await sendOtp({
+        target: email ? 'email' : 'phone',
         email,
-        password,
+        phone: phoneNumber,
       });
-      if (signUpError) {
-        Alert.alert('Signup Failed', signUpError.message);
+
+      if (!otpResponse.success) {
+        Alert.alert('OTP Failed', otpResponse.message || 'Could not send verification code.');
+        setLoading(false);
         return;
       }
 
-      // Sign in immediately
-      const { data: signInData, error: signInError } = await supabaseClient.auth.signInWithPassword({
-        email,
-        password,
-      });
-      if (signInError || !signInData.user) {
-        Alert.alert('Login Failed', signInError?.message || 'No session returned');
-        return;
-      }
+      const otpCode = otpResponse.otp;
 
-      const userId = signInData.user.id;
-
-      // Insert profile
-      const { error: insertProfileError } = await supabaseClient
-        .from('profiles')
-        .insert([
-          {
-            id: userId,
-            email,
-            full_name: fullName,
-            phone_number: phoneNumber,
-            address,
-          },
-        ]);
-      if (insertProfileError) {
-        Alert.alert('Profile Error', insertProfileError.message);
-        return;
-      }
-
-      // Insert default address
-      const { error: addressInsertError } = await supabaseClient
-        .from('addresses')
-        .insert([
-          {
-            user_id: userId,
-            label: 'Home',
-            street: address,
-            city: '',
-            state: '',
-            is_default: true,
-          },
-        ]);
-      if (addressInsertError) {
-        Alert.alert('Address Error', addressInsertError.message);
-        return;
-      }
-
-      // ✅ Generate OTP
-      const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
-
-      // Save OTP in Supabase table
-      await supabaseClient.from('otps').insert([
+      // ✅ Save OTP & user info in Supabase
+      const { error: otpInsertError } = await supabaseClient.from('otp').insert([
         {
+          user_id: null,
+          full_name: fullName,
           email,
-          phone_number: phoneNumber,
-          code: otpCode,
-          expires_at: new Date(Date.now() + 5 * 60000), // 5 min expiry
+          phone: phoneNumber,
+          password,
+          address,
+          otp_code: otpCode,
+          type: email ? 'email' : 'phone',
+          created_at: new Date().toISOString(),
+          expired_at: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
           is_used: false,
+          target: email ? 'email' : 'phone',
+          attempt: 0,
+          terms_agreed: true,
+          terms_agreed_at: new Date().toISOString(),
         },
       ]);
 
-      // Send OTP via Supabase Edge Function
-      await fetch('https://swqcxwhcxddivtacyyff.functions.supabase.co/send-otp', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, phoneNumber, code: otpCode }),
-      });
+      if (otpInsertError) console.warn('OTP insert error:', otpInsertError);
 
-      // Navigate to OTP screen
       navigation.replace('OTP', { email, phoneNumber });
-
     } catch (err) {
-      console.error(err);
-      Alert.alert('Unexpected Error', 'Please try again later');
+      console.error('Register error:', err);
+      Alert.alert('Unexpected Error', 'Please try again later.');
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <View style={{ flex: 1 }}>
+    <View style={{ flex: 1, backgroundColor: '#FFFFFF' }}>
       <TouchableOpacity
         style={styles.guestButton}
-        onPress={() => navigation.replace('MainTabs', { isGuest: true })}
+        onPress={() => navigation.replace('OTP', { email, phoneNumber })}
       >
-        <Text style={styles.guestText}>Continue as Guest</Text>
+        <Text style={styles.guestText}>Guest Mode</Text>
       </TouchableOpacity>
 
       <ScrollView contentContainerStyle={styles.container}>
         <Text style={styles.header}>Create an Account</Text>
 
-        <TextInput
-          style={styles.input}
-          placeholder="Full Name"
-          value={fullName}
-          onChangeText={setFullName}
-        />
-        <TextInput
-          style={styles.input}
-          placeholder="Email (optional if phone provided)"
-          autoCapitalize="none"
-          keyboardType="email-address"
-          value={email}
-          onChangeText={setEmail}
-        />
-        <TextInput
-          style={styles.input}
-          placeholder="Phone Number (optional if email provided)"
-          keyboardType="phone-pad"
-          value={phoneNumber}
-          onChangeText={setPhoneNumber}
-        />
+        <TextInput style={styles.input} placeholder="Full Name" value={fullName} onChangeText={setFullName} />
+        <TextInput style={styles.input} placeholder="Email" autoCapitalize="none" keyboardType="email-address" value={email} onChangeText={setEmail} />
+        <TextInput style={styles.input} placeholder="Phone Number" keyboardType="phone-pad" value={phoneNumber} onChangeText={setPhoneNumber} />
+
         <View style={styles.passwordContainer}>
           <TextInput
             style={styles.passwordInput}
@@ -186,15 +135,29 @@ const RegisterScreen = () => {
             <Text style={styles.toggle}>{showPassword ? 'Hide' : 'Show'}</Text>
           </TouchableOpacity>
         </View>
-        <TextInput
-          style={styles.input}
-          placeholder="Address"
-          value={address}
-          onChangeText={updateAddress}
-        />
 
-        <TouchableOpacity style={styles.button} onPress={handleRegister}>
-          <Text style={styles.buttonText}>Register</Text>
+        <TextInput style={styles.input} placeholder="Address" value={address} onChangeText={updateAddress} />
+
+        {/* ✅ Terms & Conditions Checkbox */}
+        <TouchableOpacity
+          style={styles.checkboxContainer}
+          onPress={() => setTermsAgreed(!termsAgreed)}
+        >
+          <View style={[styles.checkbox, termsAgreed && styles.checkboxChecked]} />
+          <Text style={styles.checkboxText}>
+            I agree to the{' '}
+            <Text style={styles.link} onPress={() => Linking.openURL('https://naili.com.ng/terms.html')}>
+              Terms & Conditions
+            </Text>{' '}
+            and{' '}
+            <Text style={styles.link} onPress={() => Linking.openURL('https://naili.com.ng/privacy.html')}>
+              Privacy Policy
+            </Text>.
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.button} onPress={handleRegister} disabled={loading}>
+          <Text style={styles.buttonText}>{loading ? 'Registering...' : 'Register'}</Text>
         </TouchableOpacity>
 
         <TouchableOpacity onPress={() => navigation.navigate('Login')}>
@@ -207,14 +170,18 @@ const RegisterScreen = () => {
 
 export default RegisterScreen;
 
-// ✅ Styles remain the same
 const styles = StyleSheet.create({
-  container: { flexGrow: 1, backgroundColor: '#fff', padding: 24, justifyContent: 'center' },
+  container: { flexGrow: 1, padding: 24, justifyContent: 'center' },
   header: { fontSize: 26, fontWeight: 'bold', marginBottom: 24, color: '#006400', textAlign: 'center' },
   input: { height: 48, borderWidth: 1, borderColor: '#CCCCCC', borderRadius: 8, paddingHorizontal: 12, marginBottom: 16 },
   passwordContainer: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: '#CCCCCC', borderRadius: 8, paddingHorizontal: 12, marginBottom: 16 },
   passwordInput: { flex: 1, height: 48 },
   toggle: { color: '#006400', fontWeight: '600' },
+  checkboxContainer: { flexDirection: 'row', alignItems: 'flex-start', marginVertical: 12 },
+  checkbox: { width: 20, height: 20, borderWidth: 1.5, borderColor: '#006400', borderRadius: 4, marginRight: 8 },
+  checkboxChecked: { backgroundColor: '#006400' },
+  checkboxText: { flex: 1, color: '#333' },
+  link: { color: '#006400', textDecorationLine: 'underline', fontWeight: '600' },
   button: { backgroundColor: '#FFD700', paddingVertical: 14, borderRadius: 8, alignItems: 'center', marginTop: 8 },
   buttonText: { color: '#006400', fontSize: 16, fontWeight: 'bold' },
   loginLink: { marginTop: 20, color: '#006400', textAlign: 'center', fontWeight: '500' },

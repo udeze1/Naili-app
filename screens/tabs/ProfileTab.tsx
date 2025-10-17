@@ -1,5 +1,5 @@
 // src/screens/profile/ProfileTab.tsx
-import React from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   View,
   Text,
@@ -10,21 +10,43 @@ import {
   Alert,
   Platform,
   Linking,
+  ActivityIndicator,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { ProfileStackParamList } from './ProfileStack';
 import { useUser } from '../../context/UserContext';
+import { supabaseClient } from '../../lib/supabase';
 
 type NavigationProp = NativeStackNavigationProp<ProfileStackParamList>;
 
 export default function ProfileTab() {
   const navigation = useNavigation<NavigationProp>();
-  const { user } = useUser();
+  const { user, setUser } = useUser();
+  const [loading, setLoading] = useState(false);
+
+  // Refresh user info when screen is focused
+  useFocusEffect(
+    useCallback(() => {
+      async function refreshUser() {
+        if (user?.id) {
+          const { data, error } = await supabaseClient
+            .from('profiles')
+            .select('*')
+            .eq('id', user.id)
+            .single();
+          if (data) setUser(data);
+        }
+      }
+      refreshUser();
+    }, [user?.id])
+  );
 
   const fullName = user?.full_name || 'Naili User';
-  const avatarUri = `https://api.dicebear.com/7.x/thumbs/svg?seed=${encodeURIComponent(fullName)}`;
+  const avatarUri = `https://api.dicebear.com/7.x/thumbs/svg?seed=${encodeURIComponent(
+    fullName
+  )}`;
 
   const showConfirm = (title: string, message: string, onConfirm: () => void) => {
     if (Platform.OS === 'web') {
@@ -37,18 +59,41 @@ export default function ProfileTab() {
     }
   };
 
-  const handleLogout = () => {
-    showConfirm('Sign Out', 'Are you sure you want to log out?', () => {
-      console.log('User logged out');
-      // TODO: Add real logout logic
+  const handleLogout = async () => {
+    showConfirm('Sign Out', 'Are you sure you want to log out?', async () => {
+      try {
+        setLoading(true);
+        await supabaseClient.from('user_logouts').insert({ user_id: user?.id });
+        await supabaseClient.auth.signOut();
+        setUser(null);
+      } catch (error) {
+        console.error('Logout failed', error);
+        Alert.alert('Error', 'Unable to logout. Please try again.');
+      } finally {
+        setLoading(false);
+      }
     });
   };
 
-  const handleDeleteAccount = () => {
-    showConfirm('Delete Account', 'This action is permanent. Proceed?', () => {
-      console.log('Account deleted');
-      // TODO: Add real delete logic
-    });
+  const handleDeleteAccount = async () => {
+    showConfirm(
+      'Delete Account',
+      'This action is permanent. Are you sure?',
+      async () => {
+        try {
+          setLoading(true);
+          await supabaseClient.from('user_deletes').insert({ user_id: user?.id });
+          await supabaseClient.from('profiles').delete().eq('id', user?.id);
+          if (user?.id) await supabaseClient.auth.admin.deleteUser(user.id);
+          setUser(null);
+        } catch (error) {
+          console.error('Delete failed', error);
+          Alert.alert('Error', 'Unable to delete account. Please try again.');
+        } finally {
+          setLoading(false);
+        }
+      }
+    );
   };
 
   const openExternal = async (url: string) => {
@@ -66,67 +111,77 @@ export default function ProfileTab() {
   };
 
   return (
-    <ScrollView style={styles.container}>
-      {/* Header */}
+    <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 32 }}>
+      {/* Header - full width */}
       <View style={styles.header}>
         <Image source={{ uri: avatarUri }} style={styles.avatar} />
         <Text style={styles.name}>{fullName}</Text>
       </View>
 
-      {/* Personal */}
-      <Text style={styles.sectionTitle}>Personal</Text>
-      <Option
-        label="Edit Profile"
-        icon="user"
-        onPress={() => navigation.navigate('ProfileDetailsScreen')}
-      />
-      <Option
-        label="Customer Feedback"
-        icon="message-circle"
-        onPress={() => navigation.navigate('CustomerFeedbackScreen')}
-      />
+      {/* Sections with padding */}
+      <View style={styles.sectionsContainer}>
+        {/* Personal Section */}
+        <Text style={styles.sectionTitle}>Personal</Text>
+        <Option
+          label="Edit Profile"
+          icon="user"
+          onPress={() => navigation.navigate('ProfileDetailsScreen')}
+        />
+        <Option
+          label="Customer Feedback"
+          icon="message-circle"
+          onPress={() => navigation.navigate('CustomerFeedbackScreen')}
+        />
 
-      {/* Community */}
-      <Text style={styles.sectionTitle}>Community</Text>
-      <Option label="Village Circle" icon="users" />
-      <Option label="Refer & Earn" icon="gift" />
+        {/* App Section */}
+        <Text style={styles.sectionTitle}>App</Text>
+        <Option label="Refer & Earn" icon="gift" />
 
-      {/* App */}
-      <Text style={styles.sectionTitle}>App</Text>
-      <Option label="FAQ" icon="help-circle" />
-      <Option
-        label="Contact Us"
-        icon="phone"
-        onPress={() => openExternal('https://naili.com.ng/contact.html')}
-      />
-
-      {/* Legal */}
-      <Text style={styles.sectionTitle}>Legal</Text>
-      <Option
-        label="Terms & Conditions"
-        icon="file-text"
-        onPress={() => openExternal('https://naili.com.ng/terms.html')}
-      />
-      <Option
-        label="Privacy Policy"
-        icon="shield"
-        onPress={() => openExternal('https://naili.com.ng/privacy.html')}
-      />
+        {/* Legal Section */}
+        <Text style={styles.sectionTitle}>Legal</Text>
+        <Option
+          label="Terms & Conditions"
+          icon="file-text"
+          onPress={() => openExternal('https://naili.com.ng/terms.html')}
+        />
+        <Option
+          label="Privacy Policy"
+          icon="shield"
+          onPress={() => openExternal('https://naili.com.ng/privacy.html')}
+        />
+        <Option
+          label="Contact Us"
+          icon="phone"
+          onPress={() => openExternal('https://naili.com.ng/contact.html')}
+        />
+      </View>
 
       {/* Footer */}
       <View style={styles.footer}>
-        <Text style={styles.quote}>🌀 “Align with Your Chi”</Text>
-        <Text style={styles.motto}>“He who knows his Chi, walks with the gods.”</Text>
+        <Text style={styles.footerText}>Manage your account with ease.</Text>
 
-        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-          <Text style={styles.logoutText}>🚪 Sign Out</Text>
+        <TouchableOpacity
+          style={[styles.button, { backgroundColor: '#FFD700' }]}
+          onPress={handleLogout}
+          disabled={loading}
+        >
+          {loading ? (
+            <ActivityIndicator color="#006400" />
+          ) : (
+            <Text style={styles.buttonText}>🚪 Sign Out</Text>
+          )}
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[styles.logoutButton, { backgroundColor: '#fee2e2' }]}
+          style={[styles.button, { backgroundColor: '#fee2e2' }]}
           onPress={handleDeleteAccount}
+          disabled={loading}
         >
-          <Text style={[styles.logoutText, { color: '#b91c1c' }]}>🗑️ Delete Account</Text>
+          {loading ? (
+            <ActivityIndicator color="#b91c1c" />
+          ) : (
+            <Text style={[styles.buttonText, { color: '#b91c1c' }]}>🗑️ Delete Account</Text>
+          )}
         </TouchableOpacity>
 
         <Text style={styles.version}>App Version 1.0.0 · ⚡ 369V</Text>
@@ -148,25 +203,35 @@ function Option({
     <TouchableOpacity style={styles.option} onPress={onPress}>
       <Feather name={icon as any} size={18} color="#006400" />
       <Text style={styles.optionLabel}>{label}</Text>
-      <Feather name="chevron-right" size={20} color="#aaa" style={{ marginLeft: 'auto' }} />
+      <Feather
+        name="chevron-right"
+        size={20}
+        color="#aaa"
+        style={{ marginLeft: 'auto' }}
+      />
     </TouchableOpacity>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff', paddingHorizontal: 16 },
+  container: { flex: 1, backgroundColor: '#fff' },
+  sectionsContainer: { paddingHorizontal: 16 },
   header: {
     alignItems: 'center',
     paddingVertical: 28,
     borderBottomWidth: 1,
     borderBottomColor: '#f1f1f1',
+    backgroundColor: '#D6EAD3', // Petal green
+    width: '100%', // full width
   },
   avatar: {
     width: 84,
     height: 84,
     borderRadius: 42,
-    backgroundColor: '#eee',
+    backgroundColor: '#D6EAD3',
     marginBottom: 8,
+    borderWidth: 2,
+    borderColor: '#FFF',
   },
   name: { fontSize: 18, fontWeight: 'bold', color: '#111' },
   sectionTitle: {
@@ -191,21 +256,27 @@ const styles = StyleSheet.create({
   footer: {
     marginTop: 40,
     alignItems: 'center',
-    marginBottom: 32,
   },
-  quote: { fontSize: 14, fontWeight: '600', color: '#333' },
-  motto: { fontSize: 12, color: '#777', marginVertical: 6 },
-  logoutButton: {
-    backgroundColor: '#FFD700',
+  footerText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 12,
+  },
+  button: {
     paddingVertical: 10,
     paddingHorizontal: 20,
     borderRadius: 8,
     marginTop: 12,
   },
-  logoutText: {
+  buttonText: {
     fontSize: 14,
     color: '#006400',
     fontWeight: '600',
   },
-  version: { fontSize: 12, color: '#999', marginTop: 12 },
+  version: {
+    fontSize: 12,
+    color: '#999',
+    marginTop: 12,
+  },
 });

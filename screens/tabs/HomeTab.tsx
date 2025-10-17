@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -7,6 +7,7 @@ import {
   ScrollView,
   Image,
   ActivityIndicator,
+  Animated,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -22,19 +23,42 @@ type Product = {
   price: number;
   image_url: string | null;
   brand: string;
+  is_available: boolean;
 };
+
+const slogans = [
+  "Fresh & Fast 🌱",
+  "Delivered with ❤️",
+  "Taste the Magic ✨",
+  "Your Chi, Your Choice 🌟",
+  "Good Food, Good Vibes 🍽️",
+  "Experience Naili First-Hand 🚀",
+  "Bringing Joy to Your Table 🥗",
+];
+
+const bannerColors = [
+  '#d1f5c2',
+  '#fdfde1',
+  '#ffe5d4',
+  '#e0f7fa',
+  '#fce4ec',
+  '#fff9c4',
+  '#e1bee7',
+];
 
 const HomeTab = () => {
   const navigation = useNavigation<HomeTabNavigationProp>();
   const { address } = useUser();
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
+  const [bannerTextIndex, setBannerTextIndex] = useState(0);
+  const fadeAnim = useRef(new Animated.Value(1)).current;
 
   const quickActions = [
     { label: 'Restaurants', key: 'Restaurants', emoji: '🍽️' },
     { label: 'Naili Supermarket', key: 'Supermarkets', emoji: '🏪' },
     { label: 'Pharmacies', key: 'Pharmacy', emoji: '💊' },
-    { label: 'More', key: 'More', emoji: '➕' },
+    { label: 'GroupOrder', key: 'GroupOrder', emoji: '➕' },
   ];
 
   const allowedBrands = [
@@ -57,12 +81,23 @@ const HomeTab = () => {
     fetchProducts();
   }, []);
 
+  // Animate header text + color
+  useEffect(() => {
+    const interval = setInterval(() => {
+      Animated.sequence([
+        Animated.timing(fadeAnim, { toValue: 0, duration: 300, useNativeDriver: true }),
+        Animated.timing(fadeAnim, { toValue: 1, duration: 300, useNativeDriver: true }),
+      ]).start();
+      setBannerTextIndex((prev) => (prev + 1) % slogans.length);
+    }, 4000);
+    return () => clearInterval(interval);
+  }, []);
+
   const fetchProducts = async () => {
     setLoading(true);
     const { data, error } = await supabaseClient
       .from('products')
-      .select('id, name, price, image_url, brand')
-      .eq('is_available', true);
+      .select('id, name, price, image_url, brand, is_available');
 
     if (error) {
       console.error('Error fetching products:', error.message);
@@ -70,10 +105,13 @@ const HomeTab = () => {
       return;
     }
 
+    // Shuffle products for Explore section
+    const shuffled = (data || []).sort(() => Math.random() - 0.5);
+
     const filtered: Product[] = [];
     const seenPerBrand: Record<string, number> = {};
 
-    for (const item of data || []) {
+    for (const item of shuffled) {
       if (allowedBrands.includes(item.brand)) {
         if (!seenPerBrand[item.brand]) seenPerBrand[item.brand] = 0;
         if (seenPerBrand[item.brand] < 4) {
@@ -98,34 +136,33 @@ const HomeTab = () => {
       case 'Pharmacy':
         navigation.navigate('PharmacyScreen');
         break;
-      case 'More':
-        navigation.navigate('MoreScreen');
+      case 'GroupOrder':
+        navigation.navigate('GroupOrderScreen', { groupOrderId: 'someGroupOrderIdFromDB', userId: 'currentUser?.id' });
         break;
     }
   };
 
   const handleProductPress = (brand: string) => {
     const screen = brandToScreenMap[brand];
-    if (screen) {
-      navigation.navigate(screen);
-    }
+    if (screen) navigation.navigate(screen);
   };
 
   return (
     <View style={{ flex: 1, backgroundColor: '#fff' }}>
       <ScrollView contentContainerStyle={styles.container}>
         {/* Address Section */}
-        <TouchableOpacity
-          style={styles.addressContainer}
-          onPress={() => navigation.navigate('DeliveryAddressScreen')}
-        >
-          <Text style={styles.addressLabel}>Deliver to</Text>
-          <Text style={styles.addressValue}>{address || 'Select address'}</Text>
-        </TouchableOpacity>
+        <View style={styles.addressContainer}>
+          <Text style={styles.addressLabel}></Text>
+          <TouchableOpacity onPress={() => navigation.navigate('DeliveryAddressScreen')}>
+            <Text style={styles.addressValue}>{address || 'Select address'}</Text>
+          </TouchableOpacity>
+        </View>
 
-        {/* Promo Banner */}
-        <View style={styles.banner}>
-          <Text style={styles.bannerText}>Experience Naili first-hand</Text>
+        {/* Animated Header */}
+        <View style={[styles.banner, { backgroundColor: bannerColors[bannerTextIndex] }]}>
+          <Animated.Text style={[styles.bannerText, { opacity: fadeAnim }]}>
+            {slogans[bannerTextIndex]}
+          </Animated.Text>
         </View>
 
         {/* Quick Actions */}
@@ -143,7 +180,7 @@ const HomeTab = () => {
           ))}
         </View>
 
-        {/* Explore */}
+        {/* Explore / Food Cards */}
         <Text style={styles.sectionTitle}>Explore</Text>
         {loading ? (
           <ActivityIndicator size="large" color="#0f0" />
@@ -151,8 +188,9 @@ const HomeTab = () => {
           products.map((item) => (
             <TouchableOpacity
               key={item.id}
-              style={styles.productCard}
+              style={[styles.productCard, { backgroundColor: '#fff' }]}
               onPress={() => handleProductPress(item.brand)}
+              disabled={!item.is_available}
             >
               <Image
                 source={{
@@ -163,6 +201,11 @@ const HomeTab = () => {
                 style={styles.productImage}
                 resizeMode="cover"
               />
+              {!item.is_available && (
+                <View style={styles.notAvailableOverlay}>
+                  <Text style={styles.notAvailableText}>Not Available</Text>
+                </View>
+              )}
               <View style={styles.productInfo}>
                 <Text style={styles.productName}>{item.name}</Text>
                 <Text style={styles.productPrice}>₦{item.price}</Text>
@@ -184,11 +227,14 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
   },
   addressContainer: {
-    marginBottom: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
   },
   addressLabel: {
     fontSize: 12,
     color: '#888',
+    marginRight: 6,
   },
   addressValue: {
     fontSize: 16,
@@ -197,18 +243,16 @@ const styles = StyleSheet.create({
     color: '#111',
   },
   banner: {
-    backgroundColor: '#fdfde1',
-    padding: 28,
+    height: 140,
     borderRadius: 12,
-    marginBottom: 28,
+    marginBottom: 20,
+    justifyContent: 'center',
     alignItems: 'center',
-    borderColor: '#c6e700',
-    borderWidth: 1.2,
   },
   bannerText: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '700',
-    color: '#111',
+    color: '#114400',
   },
   quickActionsContainer: {
     flexDirection: 'row',
@@ -219,12 +263,12 @@ const styles = StyleSheet.create({
   },
   quickActionBox: {
     width: '48%',
-    backgroundColor: '#d1f5c2',
+    backgroundColor: '#fff',
     paddingVertical: 16,
     borderRadius: 10,
     alignItems: 'center',
-    borderColor: '#a2e300',
     borderWidth: 1,
+    borderColor: '#fff',
   },
   quickActionText: {
     fontSize: 14,
@@ -238,12 +282,12 @@ const styles = StyleSheet.create({
     color: '#111',
   },
   productCard: {
-    backgroundColor: '#fffbe7',
     borderRadius: 10,
     marginBottom: 14,
     overflow: 'hidden',
-    borderColor: '#dcd200',
     borderWidth: 1,
+    borderColor: '#fff',
+    position: 'relative',
   },
   productImage: {
     width: '100%',
@@ -266,5 +310,20 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#888',
     marginTop: 4,
+  },
+  notAvailableOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(255,255,255,0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  notAvailableText: {
+    color: '#b91c1c',
+    fontWeight: '700',
+    fontSize: 16,
   },
 });

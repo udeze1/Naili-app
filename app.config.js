@@ -5,6 +5,11 @@ export default {
     name: 'Naili',
     slug: 'Naili',
     version: '1.0.0',
+    platforms: ["ios", "android", "web"],
+    web: { 
+      bundler:"webpack", 
+      favicon: "./assets/favicon.png",
+    },
     orientation: 'portrait',
     icon: './assets/icon.png',
     splash: {

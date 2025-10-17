@@ -10,58 +10,72 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
-import { supabaseClient } from '../lib/supabase'; // adjust path if needed
+import { useNavigation } from '@react-navigation/native';
+import { supabaseClient } from '../lib/supabase';
 
 export default function CustomerFeedbackScreen() {
+  const navigation = useNavigation();
   const [message, setMessage] = useState('');
   const [sending, setSending] = useState(false);
   const [userEmail, setUserEmail] = useState('');
 
-  // Get current user from Supabase Auth
+  // Fetch current user
   useEffect(() => {
     const fetchUser = async () => {
       const {
         data: { user },
-        error,
       } = await supabaseClient.auth.getUser();
 
-      if (user) {
-        setUserEmail(user.email ?? '');
-      } else {
-        setUserEmail('anonymous@user.com'); // fallback
-      }
-
-      if (error) {
-        console.log('Error fetching user:', error);
-      }
+      setUserEmail(user?.email ?? 'anonymous@user.com');
     };
-
     fetchUser();
   }, []);
 
   const handleSend = async () => {
-    if (!message.trim()) return;
-
-    setSending(true);
-
-    const { error } = await supabaseClient.from('customer_feedback').insert([
-      {
-        message,
-        email: userEmail,
-        sent_at: new Date().toISOString(),
-      },
-    ]);
-
-    setSending(false);
-
-    if (error) {
-      Alert.alert('❌ Failed to send', 'Please try again later.');
-      console.error('Supabase error:', error);
+    if (!message.trim()) {
+      Alert.alert('Missing message', 'Please enter a message before sending.');
       return;
     }
 
-    setMessage('');
-    Alert.alert('✅ Feedback Sent', 'Thanks for your feedback!');
+    setSending(true);
+
+    try {
+      // ✅ 1. Send email via Netlify + Brevo
+      const response = await fetch(
+        'https://naili.com.ng/.netlify/functions/sendFeedbackEmail',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: userEmail,
+            message,
+          }),
+        }
+      );
+
+      const result = await response.json();
+
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to send email.');
+      }
+
+      // ✅ 2. Save feedback in Supabase
+      await supabaseClient.from('customer_feedback').insert([
+        {
+          message,
+          email: userEmail,
+          sent_at: new Date().toISOString(),
+        },
+      ]);
+
+      Alert.alert('✅ Feedback Sent', 'Thanks for your feedback!');
+      setMessage('');
+    } catch (error) {
+      console.error('Feedback error:', error);
+      Alert.alert('❌ Error', 'Unable to send feedback. Please try again later.');
+    } finally {
+      setSending(false);
+    }
   };
 
   return (
@@ -69,11 +83,15 @@ export default function CustomerFeedbackScreen() {
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <Text style={styles.title}> 🗣️Customer Feedback</Text>
+      {/* 🔙 Back Arrow */}
+      <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
+        <Text style={styles.backArrow}>←</Text>
+      </TouchableOpacity>
+
+      <Text style={styles.title}>🗣️ Customer Feedback</Text>
 
       <Text style={styles.description}>
-        Have an idea, complaint, or suggestion? Send it to us directly. Your feedback helps us
-        improve.
+        Have an idea, complaint, or suggestion? Send it to us directly.
       </Text>
 
       <TextInput
@@ -97,10 +115,13 @@ export default function CustomerFeedbackScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#fff', padding: 20 },
+  backButton: { position: 'absolute', top: 50, left: 20, zIndex: 10 },
+  backArrow: { fontSize: 26, color: '#008000', fontWeight: '700' },
   title: {
     fontSize: 22,
     fontWeight: '700',
     color: '#111',
+    marginTop: 70,
     marginBottom: 10,
     textAlign: 'center',
   },
@@ -121,13 +142,13 @@ const styles = StyleSheet.create({
   },
   button: {
     marginTop: 20,
-    backgroundColor: '#facc15', // Naili green
+    backgroundColor: '#facc15',
     paddingVertical: 14,
     borderRadius: 10,
     alignItems: 'center',
   },
   buttonText: {
-    color: '#008000',
+    color: '#006400',
     fontSize: 16,
     fontWeight: '600',
   },

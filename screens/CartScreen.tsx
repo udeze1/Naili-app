@@ -168,7 +168,7 @@ export default function CartScreen() {
         <View style={styles.header}>
           <View style={styles.headerLeft}>
             <TouchableOpacity onPress={() => navigation.goBack()} style={{ marginRight: 8 }}>
-              <Ionicons name="arrow-back" size={24} color="#000" />
+              <Ionicons name="arrow-back" size={24} color="#0a4814ff" />
             </TouchableOpacity>
             <Text style={styles.heading}>Your Cart</Text>
           </View>
@@ -304,7 +304,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
   },
   headerLeft: { flexDirection: 'row', alignItems: 'center' },
-  heading: { fontSize: 22, fontWeight: 'bold' },
+  heading: { fontSize: 22, fontWeight: 'bold', color: '#0a4814ff' },
   tabContainer: { flexDirection: 'row', marginBottom: 10 },
   tabButton: { flex: 1, paddingVertical: 10, borderBottomWidth: 2, borderColor: '#ccc', alignItems: 'center' },
   activeTab: { borderColor: '#065f46' },

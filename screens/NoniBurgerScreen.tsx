@@ -8,8 +8,8 @@ import {
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
-} from 'react-native'; 
-import { Image } from 'react-native';
+  Image,
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -23,49 +23,50 @@ type MenuItem = {
   price: number;
   description?: string;
   category?: string;
-  image_url?: string; // Assuming image is part of the product data
+  image_url?: string;
 };
 
 export default function NoniBurgerScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<HomeTabStackParamList>>();
-  const { localCart, updateItem } = useCart(); 
+  const { localCart, updateItem } = useCart();
 
   const [totalPrice, setTotalPrice] = useState(0);
-
   const [products, setProducts] = useState<MenuItem[]>([]);
   const [loading, setLoading] = useState(true);
 
   const totalCount = Object.values(localCart).reduce((sum, qty) => sum + qty, 0);
 
-useEffect(() => {
-  const calculateTotal = async () => {
-    const productIds = Object.keys(localCart);
-    if (productIds.length === 0) {
-      setTotalPrice(0);
-      return;
-    }
+  // Calculate total price whenever cart changes
+  useEffect(() => {
+    const calculateTotal = async () => {
+      const productIds = Object.keys(localCart);
+      if (!productIds.length) {
+        setTotalPrice(0);
+        return;
+      }
 
-    const { data, error } = await supabaseClient
-      .from('products')
-      .select('id, price')
-      .in('id', productIds);
+      const { data, error } = await supabaseClient
+        .from('products')
+        .select('id, price')
+        .in('id', productIds);
 
-    if (error) {
-      console.error('Error calculating total price:', error.message);
-      return;
-    }
+      if (error) {
+        console.error('Error calculating total price:', error.message);
+        return;
+      }
 
-    const total = data.reduce((sum, item) => {
-      const qty = localCart[item.id] || 0;
-      return sum + qty * item.price;
-    }, 0);
+      const total = data.reduce((sum, item) => {
+        const qty = localCart[item.id] || 0;
+        return sum + qty * item.price;
+      }, 0);
 
-    setTotalPrice(total);
-  };
+      setTotalPrice(total);
+    };
 
-  calculateTotal();
-}, [localCart]);
+    calculateTotal();
+  }, [localCart]);
 
+  // Load products for Noni Burger
   useEffect(() => {
     const loadProducts = async () => {
       const { data, error } = await supabaseClient
@@ -73,11 +74,9 @@ useEffect(() => {
         .select('*')
         .eq('brand', 'Noni Burger & Co');
 
-      if (error) {
-        console.error('Error fetching products:', error.message);
-      } else {
-        setProducts(data || []);
-      }
+      if (error) console.error('Error fetching products:', error.message);
+      else setProducts(data || []);
+
       setLoading(false);
     };
 
@@ -91,44 +90,45 @@ useEffect(() => {
 
   const decreaseQty = (item: MenuItem) => {
     const currentQty = localCart[item.id] || 0;
-    if (currentQty > 0) {
-      updateItem(String(item.id), currentQty - 1);
-    }
+    if (currentQty > 0) updateItem(String(item.id), currentQty - 1);
   };
 
   const renderItem = ({ item }: { item: MenuItem }) => {
     const qty = localCart[item.id] || 0;
 
     return (
-      <View style={styles.item}>
+      <View style={styles.item} key={item.id}>
+        {/* Left: Product info */}
         <View style={styles.itemLeft}>
           <Text style={styles.name}>{item.name}</Text>
           {item.description && <Text style={styles.desc}>{item.description}</Text>}
           <Text style={styles.price}>₦{item.price}</Text>
         </View>
 
-        <View style={styles.itemRight}> 
+        {/* Right: Image + controls unified */}
+        <View style={styles.itemRight}>
+          <View style={styles.imageBox}>
+            {item.image_url ? (
+              <Image
+                source={{ uri: item.image_url }}
+                style={styles.image}
+                resizeMode="cover"
+              />
+            ) : (
+              <View style={styles.image} />
+            )}
 
- {item.image_url ? (
-  <Image
-    source={{ uri: item.image_url }}
-    style={styles.image}
-    resizeMode="cover"
-  />
-) : (
-  <View style={styles.image} />
-)}
+            <View style={styles.controls}>
+              <TouchableOpacity onPress={() => decreaseQty(item)} style={styles.btn}>
+                <Text style={styles.btnText}>−</Text>
+              </TouchableOpacity>
 
-          <View style={styles.controls}> 
-            <TouchableOpacity onPress={() => decreaseQty(item)} style={styles.btn}>
-              <Text style={styles.btnText}>−</Text>
-            </TouchableOpacity>
+              <Text style={styles.qty}>{qty}</Text>
 
-            <Text style={styles.qty}>{qty}</Text>
-
-            <TouchableOpacity onPress={() => increaseQty(item)} style={styles.btn}>
-              <Text style={styles.btnText}>＋</Text>
-            </TouchableOpacity>
+              <TouchableOpacity onPress={() => increaseQty(item)} style={styles.btn}>
+                <Text style={styles.btnText}>＋</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </View>
@@ -137,6 +137,7 @@ useEffect(() => {
 
   return (
     <View style={styles.container}>
+      {/* Back button */}
       <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backRow}>
         <Ionicons name="arrow-back" size={24} color="#14532D" />
         <Text style={styles.title}>Noni Burger</Text>
@@ -198,15 +199,16 @@ const styles = StyleSheet.create({
   price: { color: '#14532D', fontSize: 14, marginTop: 4 },
 
   itemRight: { alignItems: 'center' },
-  image: { width: 60, height: 60, borderRadius: 8, backgroundColor: '#eee' },
-  controls: { flexDirection: 'row', marginTop: 6, alignItems: 'center' },
+  imageBox: { alignItems: 'center', backgroundColor: '#DCFCE7', padding: 6, borderRadius: 10 },
+  image: { width: 70, height: 70, borderRadius: 8, backgroundColor: '#eee' },
+  controls: { flexDirection: 'row', alignItems: 'center', marginTop: 6 },
   btn: {
-    backgroundColor: '#DCFCE7',
-    paddingHorizontal: 8,
+    backgroundColor: '#14532D',
+    paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 6,
   },
-  btnText: { fontSize: 18, color: '#14532D' },
+  btnText: { fontSize: 18, color: '#fff' },
   qty: { marginHorizontal: 10, fontSize: 16 },
 
   checkoutBar: {
